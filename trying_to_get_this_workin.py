@@ -2,6 +2,7 @@ import networkx as nx
 
 from pysat.solvers import Minicard
 from pysat.formula import CNFPlus, IDPool
+from pysat.card import CardEnc
 
 
 # Q2
@@ -48,11 +49,9 @@ def gen_solution(G: nx.Graph, k: int) -> list[tuple[int, set, set]]:
             # mouv (en t) -> rive(sommet) = rive(berger) (en t)
             cnf.append([-mouv(s, t), pos(s, t), -pos(0, t)])
             cnf.append([-mouv(s, t), -pos(s, t), pos(0, t)])
-        for t in range(0, max_t):
             # mouv (en t) -> rive(sommet) = rive(berger) (en t + 1)
             cnf.append([-mouv(s, t), pos(s, t + 1), -pos(0, t + 1)])
             cnf.append([-mouv(s, t), -pos(s, t + 1), pos(0, t + 1)])
-        for t in range(0, max_t): 
             ### IL MANQUAIT PEUT ETRE UNE CONTRAINTE SUR LE FAIT QU UN MOUVEMENT SOIT VRAI QUAND UN SOMMET EST DEPLACE
             cnf.append([-mouv(s, t), -pos(s, t), -pos(s, t + 1)])
             cnf.append([-mouv(s, t), pos(s, t), pos(s, t + 1)])
@@ -61,12 +60,7 @@ def gen_solution(G: nx.Graph, k: int) -> list[tuple[int, set, set]]:
 
     print("Contraintes sur le nombre k de mouvements")
     for t in range(0, max_t): # mouv = [0, max_t - 1], |mouv| = max_t
-        cnf.append([[mouv(s, t) for s in G.nodes], k], is_atmost=True) # choisi au plus k sommets à déplacer à chaque t
-
-    """
-    for t in range(0, 3):
-      print([(s, t) for s in h.nodes])
-    """
+        cnf.extend(CardEnc.atmost(lits=[mouv(s, t) for s in G.nodes], bound=k, vpool=vpool).clauses) # choisi au plus k sommets à déplacer à chaque t
 
 # Vu les print de clauses et de solution, je pense que mtn on a un probleme sur le respect de "transporter max k sommet à la fois"
 # (1, 3 et 4 sont tansportés au temps 1, tous en meme temps)
@@ -74,6 +68,7 @@ def gen_solution(G: nx.Graph, k: int) -> list[tuple[int, set, set]]:
 
     print("Clauses construites:\n")
     print(cnf.clauses)  # pour afficher les clauses
+    print(cnf.atmosts)
 
     # solver
     s = Minicard()
@@ -103,14 +98,12 @@ def find_c_alcuin_number(G: nx.Graph, c: int) -> int:
     # À COMPLÉTER
     return
 
-# g = nx.Graph()
-# g.add_nodes_from([1, 2, 3])
-# g.add_edges_from([(1, 2), (2, 3)])
-# gen_solution(g,1) # Should return a solution
+g = nx.Graph()
+g.add_nodes_from([1, 2, 3])
+g.add_edges_from([(1, 2), (2, 3)])
+gen_solution(g,1) # Should return a solution
 
-h = nx.Graph()
-h.add_nodes_from([1, 2, 3, 4])
-# for t in range(0, 3):
-#     print([(s, t) for s in h.nodes])
-h.add_edges_from([(2, 1), (2, 3), (2, 4)])
-gen_solution(h, 1) # Should return None
+# h = nx.Graph()
+# h.add_nodes_from([1, 2, 3, 4])
+# h.add_edges_from([(2, 1), (2, 3), (2, 4)])
+# gen_solution(h, 1) # Should return None
