@@ -6,6 +6,7 @@ from pysat.card import CardEnc # Pour les contraintes de cardinalité
 
 from utils import *
 
+
 PRINT_Q2_CLAUSIS = False
 PRINT_Q2_SOL = False
 PRINT_Q5_CLAUSIS = False
@@ -129,28 +130,28 @@ def gen_solution_cvalid(G: nx.Graph, k: int, c: int) -> list[tuple[int, set, set
     def comp(s, t, c):
         return vpool.id((s, t+1, c))
 
-    if PRINT_Q5_CLAUSIS: print("Construction des clauses...\n\nContraintes d'alternance du berger")
+    if PRINT_Q2_CLAUSIS: print("Construction des clauses...\n\nContraintes d'alternance du berger")
     for t in range(0, max_t):
         cnf.append([pos(-1, t), pos(-1, t + 1)])
         cnf.append([-pos(-1, t), -pos(-1, t + 1)])
     cnf.append([-pos(-1, 0)])  # Impose que le berger commence à gauche
     cnf.append([pos(-1, max_t)])  # Impose que le berger finisse à droite
 
-    if PRINT_Q5_CLAUSIS: print("Tous les sommets commencent à 0 (gauche)")
+    if PRINT_Q2_CLAUSIS: print("Tous les sommets commencent à 0 (gauche)")
     for s in G.nodes:
         cnf.append([-pos(s, 0)])  # Impose que chaque sommet commence à gauche
 
-    if PRINT_Q5_CLAUSIS: print("Tous les sommets finissent à 1 (droite)")
+    if PRINT_Q2_CLAUSIS: print("Tous les sommets finissent à 1 (droite)")
     for s in G.nodes:
         cnf.append([pos(s, max_t)]) # Impose que chaque sommet finisse à droite
 
-    if PRINT_Q5_CLAUSIS: print("Contraintes sur les conflits entre sommets")
+    if PRINT_Q2_CLAUSIS: print("Contraintes sur les conflits entre sommets")
     for (v, w) in G.edges:
         for t in range(0, max_t + 1): # Verifie pour toutes les configurations donc dans [0, max_t]
             cnf.append([pos(-1, t), -pos(v, t), -pos(w, t)])
             cnf.append([-pos(-1, t), pos(v, t), pos(w, t)])
 
-    if PRINT_Q5_CLAUSIS: print("Contraintes sur la cohérence des mouvements")
+    if PRINT_Q2_CLAUSIS: print("Contraintes sur la cohérence des mouvements")
     for s in G.nodes:
         for t in range(0, max_t): # mouv = [0, max_t - 1], |mouv| = max_t
             # mouv(sommet, t) -> [rive(sommet, t) = rive(berger, t)]
@@ -165,14 +166,21 @@ def gen_solution_cvalid(G: nx.Graph, k: int, c: int) -> list[tuple[int, set, set
             cnf.append([mouv(s, t), -pos(s, t), pos(s, t + 1)])
             cnf.append([mouv(s, t), pos(s, t), -pos(s, t + 1)])
 
-    for s in G.nodes:# mouv(s, t) -> [comp(s, t+1, c) | c in [0, c]]
-        for t in range(0, max_t):
-            clause = [-mouv(s, t)]
-            for c in range(1, c+1):
-                clause.append(comp(s, t, c))
-            cnf.append(clause) # au moins un comp(s, t, c) est vrai si mouv(s, t) est vrai
+    if PRINT_Q2_CLAUSIS: print("Contraintes sur le nombre k de mouvements")
+    for t in range(0, max_t): # mouv = [0, max_t - 1], |mouv| = max_t
+        cnf.extend(CardEnc.atmost(lits=[mouv(s, t) for s in G.nodes], bound=k, vpool=vpool).clauses) # choisi au plus k sommets à déplacer par t
 
-    if PRINT_Q5_CLAUSIS : print("Contraintes sur les compartiements")
+    if PRINT_Q5_CLAUSIS: print("Contraintes sur les compartiments en fonction des mouvements")
+    for s in G.nodes: # mouv(s, t) -> [comp(s, t+1, c) | c in [0, c]]
+        for t in range(0, max_t):
+            clause_1 = [-mouv(s, t)]
+            for c in range(1, c+1):
+                clause_1.append(comp(s, t, c))
+            cnf.append(clause_1) # au moins un comp(s, t, c) est vrai si mouv(s, t) est vrai
+            for c in range(1, c+1):
+                cnf.append([mouv(s, t), -comp(s, t, c)])
+
+    if PRINT_Q5_CLAUSIS : print("Contraintes sur l'unicité des compartiments par sommet")
     for t in range(0, max_t):
         for s in G.nodes:
             cnf.extend(CardEnc.atmost(lits=[comp(s, t, c) for c in range(1, c+1)], bound=1, vpool=vpool).clauses) # au plus un comp(s, t, c) est vrai à la fois
@@ -182,10 +190,6 @@ def gen_solution_cvalid(G: nx.Graph, k: int, c: int) -> list[tuple[int, set, set
         for t in range(0, max_t):
             for c in range(1, c+1):
                 cnf.append([-comp(v, t, c), -comp(w, t, c)])
-
-    if PRINT_Q5_CLAUSIS: print("Contraintes sur le nombre k de mouvements")
-    for t in range(0, max_t): # mouv = [0, max_t - 1], |mouv| = max_t
-        cnf.extend(CardEnc.atmost(lits=[mouv(s, t) for s in G.nodes], bound=k, vpool=vpool).clauses) # choisi au plus k sommets à déplacer par t
 
     if PRINT_Q5_CLAUSIS: print("Clauses construites.\n")
 
@@ -230,8 +234,29 @@ def gen_solution_cvalid(G: nx.Graph, k: int, c: int) -> list[tuple[int, set, set
 
 # Q6
 def find_c_alcuin_number(G: nx.Graph, c: int) -> int:
-    # À COMPLÉTER
-    return
+    # max_k, min_k = len(G), 1 # max = n est une solution sûre
+
+    # while min_k < max_k: # Recherche dichotomique
+    #     print('min, max =', min_k, max_k)
+    #     k = (min_k + max_k) // 2 
+    #     if gen_solution_cvalid(G, c, k) is None:  # k n'est pas la solution
+    #         print("Failed for k = ", k)
+    #         min_k = k + 1 # sol > k
+    #     else: # k est une solution
+    #         max_k = k # sol <= k
+
+    # if gen_solution_cvalid(G, c, min_k) is None:
+    #     return float('+inf') 
+    k = 1
+    going_on = True
+    while going_on and k != len(G.nodes):
+        if gen_solution_cvalid(G, k, c) is None:
+            k += 1
+        else:
+            going_on = False
+    if k == len(G.nodes):
+        return float('+inf')
+    return k
 
 
 # # Test Q2 - devrait trouver une solution
@@ -256,10 +281,10 @@ def find_c_alcuin_number(G: nx.Graph, c: int) -> int:
 # h.add_edges_from([(2, 1), (2, 3), (2, 4)])
 # gen_solution(h, 1) 
 
-# TEST Q5 - devrait trouver une solution
+#TEST Q5 - devrait trouver une solution
 # print("Test Q5")
-
-# solution = gen_solution_cvalid(PathGraph(3), 2, 1)
+# n = 4
+# solution = gen_solution_cvalid(CompleteGraph(n), n-1, n-1)
 # for s in solution:
 #     print(s)
 
